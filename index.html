@@ -1,20 +1,748 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DuriSense — วิเคราะห์ทุเรียน</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f4f0;
+    color: #1a1a18;
+    min-height: 100vh;
+  }
 
-<title>omamo</title>
+  header {
+    background: #fff;
+    border-bottom: 0.5px solid #e0dfd7;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header .logo {
+    width: 32px; height: 32px;
+    background: #3B6D11;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 18px;
+  }
+  header h1 { font-size: 18px; font-weight: 500; }
+  .version-badge {
+    margin-left: auto; font-size: 12px;
+    background: #EAF3DE; color: #27500A;
+    padding: 3px 10px; border-radius: 20px;
+  }
 
-<meta name="apple-itunes-app" content="app-id=6752642477">
+  main { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
 
-<meta property="og:title" content="Omamo">
-<meta property="og:description" content="hello world by omamo">
-<meta property="og:image" content="https://yourdomain.com/icon.png">
+  .card {
+    background: #fff;
+    border-radius: 14px;
+    border: 0.5px solid #e0dfd7;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
 
+  /* Step indicator */
+  .steps {
+    display: flex;
+    padding: 14px 18px;
+    gap: 0;
+    border-bottom: 0.5px solid #e0dfd7;
+    background: #fafaf7;
+  }
+  .step {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 5px; position: relative;
+  }
+  .step:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 14px; left: 60%;
+    width: 80%; height: 1px;
+    background: #e0dfd7;
+  }
+  .step-circle {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #e0dfd7; color: #888780;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 500;
+    position: relative; z-index: 1;
+    transition: all 0.3s;
+  }
+  .step.active .step-circle { background: #3B6D11; color: #fff; }
+  .step.done .step-circle { background: #EAF3DE; color: #27500A; }
+  .step-label { font-size: 11px; color: #888780; text-align: center; }
+  .step.active .step-label { color: #3B6D11; font-weight: 500; }
+
+  /* Camera */
+  #camera-area {
+    width: 100%; aspect-ratio: 4/3;
+    background: #2C2C2A;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden; position: relative;
+  }
+  #preview-img { width: 100%; height: 100%; object-fit: cover; display: none; }
+  #camera-area.has-image #preview-img { display: block; }
+  #camera-area.has-image .cam-placeholder { display: none; }
+  .cam-placeholder {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 12px; color: #888780;
+  }
+  .cam-placeholder p { font-size: 14px; }
+  #file-input { display: none; }
+
+  /* Audio recorder */
+  #audio-section { padding: 20px 18px; }
+  .audio-title { font-size: 15px; font-weight: 500; margin-bottom-4px; }
+  .audio-desc { font-size: 13px; color: #888780; margin-bottom: 16px; margin-top: 4px; }
+
+  .record-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: 0.5px solid #e0dfd7;
+    background: #fff;
+    font-size: 15px; font-weight: 500;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.2s;
+    color: #1a1a18;
+  }
+  .record-btn.recording {
+    background: #FCEBEB;
+    border-color: #E24B4A;
+    color: #791F1F;
+    animation: pulse 1s infinite;
+  }
+  .record-btn.done {
+    background: #EAF3DE;
+    border-color: #3B6D11;
+    color: #27500A;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+  }
+
+  .waveform {
+    display: none;
+    height: 48px;
+    background: #f5f4f0;
+    border-radius: 10px;
+    margin-top: 12px;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 14px;
+    overflow: hidden;
+  }
+  .waveform.show { display: flex; }
+  .wave-bar {
+    width: 3px; border-radius: 2px;
+    background: #E24B4A;
+    animation: wave 0.5s ease-in-out infinite alternate;
+  }
+  @keyframes wave {
+    from { height: 6px; }
+    to { height: 36px; }
+  }
+
+  .knock-counter {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 12px; padding: 10px 14px;
+    background: #f5f4f0; border-radius: 10px;
+    font-size: 13px; color: #888780;
+  }
+  .knock-dots { display: flex; gap: 6px; }
+  .knock-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #e0dfd7;
+    transition: background 0.2s;
+  }
+  .knock-dot.hit { background: #3B6D11; }
+
+  .audio-result {
+    display: none;
+    margin-top: 12px; padding: 12px 14px;
+    background: #EAF3DE; border-radius: 10px;
+    font-size: 13px;
+  }
+  .audio-result.show { display: block; }
+  .audio-result-title { font-weight: 500; color: #27500A; margin-bottom: 4px; }
+  .audio-result-detail { color: #3B6D11; }
+
+  /* Buttons */
+  .btn-row {
+    display: flex; gap: 10px;
+    padding: 14px 16px;
+    border-top: 0.5px solid #e0dfd7;
+  }
+  .btn {
+    flex: 1; padding: 11px 0;
+    border-radius: 10px;
+    border: 0.5px solid #c8c7bf;
+    background: #fff;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    transition: background 0.15s;
+    color: #1a1a18;
+  }
+  .btn:active { background: #f1efe8; }
+  .btn.primary { background: #3B6D11; color: #fff; border-color: #3B6D11; }
+  .btn.primary:active { background: #27500A; }
+  .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* Loading */
+  #loading { display: none; padding: 36px 20px; text-align: center; }
+  #loading.show { display: block; }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid #e0dfd7;
+    border-top-color: #3B6D11;
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { font-size: 14px; color: #888780; }
+
+  /* Result */
+  #result-card { display: none; }
+  #result-card.show { display: block; }
+
+  .result-header {
+    padding: 16px 18px 12px;
+    border-bottom: 0.5px solid #e0dfd7;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .result-title { font-size: 16px; font-weight: 500; }
+  .badge {
+    font-size: 12px; font-weight: 500;
+    padding: 4px 10px; border-radius: 20px;
+  }
+  .badge.success { background: #EAF3DE; color: #27500A; }
+  .badge.warning { background: #FAEEDA; color: #633806; }
+  .badge.danger  { background: #FCEBEB; color: #791F1F; }
+
+  .result-body { padding: 16px 18px; }
+
+  .species-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 0; border-bottom: 0.5px solid #e0dfd7;
+  }
+  .species-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: #EAF3DE;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 24px;
+  }
+  .species-name { font-size: 18px; font-weight: 500; }
+  .species-conf { font-size: 13px; color: #888780; margin-top: 2px; }
+
+  .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 14px 0; }
+  .metric { background: #f5f4f0; border-radius: 10px; padding: 12px 14px; }
+  .metric-label { font-size: 12px; color: #888780; margin-bottom: 5px; }
+  .metric-value { font-size: 22px; font-weight: 500; }
+  .metric-sub { font-size: 12px; color: #888780; margin-top: 2px; }
+
+  .ripeness-bar-wrap { margin: 4px 0 14px; }
+  .ripeness-bar-label {
+    display: flex; justify-content: space-between;
+    font-size: 12px; color: #888780; margin-bottom: 6px;
+  }
+  .ripeness-bar-bg { width: 100%; height: 8px; background: #e0dfd7; border-radius: 4px; overflow: hidden; }
+  .ripeness-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+  .flesh-section { border-top: 0.5px solid #e0dfd7; padding-top: 14px; margin-top: 4px; }
+  .flesh-title { font-size: 13px; font-weight: 500; color: #888780; margin-bottom: 10px; }
+  .flesh-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+  .flesh-tag {
+    font-size: 13px; padding: 5px 12px;
+    border-radius: 20px; background: #f5f4f0;
+    border: 0.5px solid #e0dfd7; color: #444441;
+  }
+
+  .eat-day {
+    margin-top: 14px; padding: 12px 14px;
+    border-radius: 10px; background: #EAF3DE;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eat-day-text { font-size: 14px; font-weight: 500; }
+  .eat-day-sub { font-size: 12px; margin-top: 2px; }
+
+  /* Audio summary in result */
+  .audio-summary {
+    margin-top: 12px; padding: 12px 14px;
+    background: #f5f4f0; border-radius: 10px;
+  }
+  .audio-summary-title { font-size: 12px; color: #888780; margin-bottom: 6px; }
+  .audio-bars { display: flex; gap: 6px; align-items: flex-end; height: 32px; }
+  .audio-bar-item { flex: 1; border-radius: 3px 3px 0 0; background: #3B6D11; opacity: 0.7; }
+
+  .retry-btn {
+    margin: 0 18px 18px;
+    width: calc(100% - 36px);
+    padding: 11px 0; border-radius: 10px;
+    border: 0.5px solid #c8c7bf; background: #fff;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    color: #1a1a18; transition: background 0.15s;
+  }
+  .retry-btn:active { background: #f1efe8; }
+
+  .demo-note {
+    text-align: center; font-size: 12px;
+    color: #888780; margin-top: 8px;
+  }
+</style>
 </head>
-
 <body>
-<h1>hello world by omamo</h1>
+
+<header>
+  <div class="logo">🌿</div>
+  <h1>DuriSense</h1>
+  <span class="version-badge">Demo v0.2</span>
+</header>
+
+<main>
+
+<!-- Step 1: ถ่ายรูป -->
+<div class="card" id="photo-card">
+  <div class="steps">
+    <div class="step active" id="step1">
+      <div class="step-circle">1</div>
+      <div class="step-label">ถ่ายรูป</div>
+    </div>
+    <div class="step" id="step2">
+      <div class="step-circle">2</div>
+      <div class="step-label">เคาะเสียง</div>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-circle">3</div>
+      <div class="step-label">ผลลัพธ์</div>
+    </div>
+  </div>
+
+  <div id="camera-area" onclick="document.getElementById('file-input').click()">
+    <img id="preview-img" src="" alt="ภาพทุเรียน">
+    <div class="cam-placeholder">
+      <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+      </svg>
+      <p>แตะเพื่อถ่ายรูปทุเรียน</p>
+    </div>
+  </div>
+  <input type="file" id="file-input" accept="image/*" capture="environment">
+
+  <div class="btn-row">
+    <button class="btn" onclick="document.getElementById('file-input').click()">เลือกภาพ</button>
+    <button class="btn primary" id="next-to-audio-btn" disabled onclick="goToAudio()">ถัดไป →</button>
+  </div>
+</div>
+
+<!-- Step 2: บันทึกเสียง -->
+<div class="card" id="audio-card" style="display:none">
+  <div class="steps">
+    <div class="step done" id="step1b">
+      <div class="step-circle">✓</div>
+      <div class="step-label">ถ่ายรูป</div>
+    </div>
+    <div class="step active" id="step2b">
+      <div class="step-circle">2</div>
+      <div class="step-label">เคาะเสียง</div>
+    </div>
+    <div class="step" id="step3b">
+      <div class="step-circle">3</div>
+      <div class="step-label">ผลลัพธ์</div>
+    </div>
+  </div>
+
+  <div id="audio-section">
+    <div class="audio-title">🔊 บันทึกเสียงเคาะ</div>
+    <div class="audio-desc">กดปุ่มด้านล่าง แล้วเคาะทุเรียน 3 ครั้ง ช้าๆ ห่างกัน 1 วินาที</div>
+
+    <button class="record-btn" id="record-btn" onclick="toggleRecord()">
+      <svg id="mic-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+      </svg>
+      <span id="record-label">กดค้างเพื่อบันทึกเสียงเคาะ</span>
+    </button>
+
+    <div class="waveform" id="waveform"></div>
+
+    <div class="knock-counter" id="knock-counter" style="display:none">
+      <span>ตรวจพบเสียงเคาะ:</span>
+      <div class="knock-dots">
+        <div class="knock-dot" id="dot1"></div>
+        <div class="knock-dot" id="dot2"></div>
+        <div class="knock-dot" id="dot3"></div>
+      </div>
+      <span id="knock-count-text">0/3 ครั้ง</span>
+    </div>
+
+    <div class="audio-result" id="audio-result">
+      <div class="audio-result-title" id="audio-result-title">วิเคราะห์เสียงเสร็จแล้ว</div>
+      <div class="audio-result-detail" id="audio-result-detail">เสียงกังวานปานกลาง — คาดว่าสุกพอดี</div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn" onclick="backToPhoto()">← ถ่ายใหม่</button>
+    <button class="btn primary" id="analyze-btn" onclick="runAnalysis()">วิเคราะห์</button>
+  </div>
+</div>
+
+<!-- Loading -->
+<div class="card" id="loading">
+  <div style="padding:36px 20px;text-align:center">
+    <div class="spinner"></div>
+    <p id="loading-text">กำลังวิเคราะห์...</p>
+  </div>
+</div>
+
+<!-- Result -->
+<div class="card" id="result-card">
+  <div class="result-header">
+    <span class="result-title">ผลการวิเคราะห์</span>
+    <span class="badge" id="result-badge">สุกพอดี</span>
+  </div>
+  <div class="result-body">
+    <div class="species-row">
+      <div class="species-icon">🌿</div>
+      <div>
+        <div class="species-name" id="r-species">หมอนทอง</div>
+        <div class="species-conf" id="r-species-conf">ความมั่นใจ 94%</div>
+      </div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-label">ความสุก (ภาพ)</div>
+        <div class="metric-value" id="r-visual">82%</div>
+        <div class="metric-sub">วิเคราะห์จากรูป</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">ความสุก (เสียง)</div>
+        <div class="metric-value" id="r-audio">91%</div>
+        <div class="metric-sub">วิเคราะห์จากเสียง</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">ความสุกรวม</div>
+        <div class="metric-value" id="r-ripeness">87%</div>
+        <div class="metric-sub" id="r-ripeness-label">สุกพอดี</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">เนื้อ (คาดการณ์)</div>
+        <div class="metric-value" id="r-flesh">31%</div>
+        <div class="metric-sub">ของน้ำหนักรวม</div>
+      </div>
+    </div>
+
+    <div class="ripeness-bar-wrap">
+      <div class="ripeness-bar-label">
+        <span>ดิบ</span><span>สุกพอดี</span><span>สุกงอม</span>
+      </div>
+      <div class="ripeness-bar-bg">
+        <div class="ripeness-bar-fill" id="r-bar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Audio waveform summary -->
+    <div class="audio-summary">
+      <div class="audio-summary-title">ลายเสียงที่บันทึกได้</div>
+      <div class="audio-bars" id="r-audio-bars"></div>
+    </div>
+
+    <div class="flesh-section">
+      <div class="flesh-title">ลักษณะเนื้อคาดการณ์</div>
+      <div class="flesh-tags" id="r-flesh-tags"></div>
+    </div>
+
+    <div class="eat-day" id="eat-day-box">
+      <div>
+        <div class="eat-day-text" id="r-eat-day">เหมาะกินวันนี้ – พรุ่งนี้</div>
+        <div class="eat-day-sub" id="r-eat-sub">เก็บในตู้เย็นได้อีก 1–2 วัน</div>
+      </div>
+    </div>
+  </div>
+  <button class="retry-btn" onclick="resetApp()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>
+    </svg>
+    วิเคราะห์ใหม่
+  </button>
+</div>
+
+<p class="demo-note">* ตัวเลขเป็น mock data — AI จริงจะ connect ภายหลัง</p>
+
+</main>
+
+<script>
+// ===== STATE =====
+let hasPhoto = false;
+let hasAudio = false;
+let isRecording = false;
+let mediaRecorder = null;
+let knockCount = 0;
+let recordTimer = null;
+let audioContext = null;
+let analyser = null;
+let waveAnimFrame = null;
+
+// ===== PHOTO =====
+document.getElementById('file-input').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('preview-img').src = ev.target.result;
+    document.getElementById('camera-area').classList.add('has-image');
+    hasPhoto = true;
+    document.getElementById('next-to-audio-btn').disabled = false;
+  };
+  reader.readAsDataURL(file);
+});
+
+function goToAudio() {
+  document.getElementById('photo-card').style.display = 'none';
+  document.getElementById('audio-card').style.display = 'block';
+}
+
+function backToPhoto() {
+  document.getElementById('audio-card').style.display = 'none';
+  document.getElementById('photo-card').style.display = 'block';
+}
+
+// ===== AUDIO RECORDING =====
+async function toggleRecord() {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    await startRecording();
+  }
+}
+
+async function startRecording() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+    analyser.fftSize = 256;
+
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.start();
+
+    isRecording = true;
+    knockCount = 0;
+
+    // UI: recording state
+    const btn = document.getElementById('record-btn');
+    btn.classList.add('recording');
+    document.getElementById('record-label').textContent = 'กำลังบันทึก... เคาะ 3 ครั้ง';
+
+    // Show waveform
+    const waveform = document.getElementById('waveform');
+    waveform.innerHTML = '';
+    for (let i = 0; i < 24; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'wave-bar';
+      bar.style.animationDelay = (i * 0.05) + 's';
+      bar.style.animationDuration = (0.3 + Math.random() * 0.4) + 's';
+      waveform.appendChild(bar);
+    }
+    waveform.classList.add('show');
+
+    // Show knock counter
+    document.getElementById('knock-counter').style.display = 'flex';
+
+    // Simulate knock detection (mock)
+    simulateKnockDetection();
+
+    // Auto stop after 6 seconds
+    recordTimer = setTimeout(() => {
+      if (isRecording) stopRecording();
+    }, 6000);
+
+  } catch(e) {
+    alert('ไม่สามารถเข้าถึงไมโครโฟนได้ กรุณาอนุญาตการใช้ไมค์ในเบราว์เซอร์');
+  }
+}
+
+function simulateKnockDetection() {
+  // Simulate detecting 3 knocks at random intervals
+  const times = [800, 1800, 2900];
+  times.forEach((t, i) => {
+    setTimeout(() => {
+      if (!isRecording) return;
+      knockCount = i + 1;
+      document.getElementById('dot' + knockCount).classList.add('hit');
+      document.getElementById('knock-count-text').textContent = knockCount + '/3 ครั้ง';
+      if (knockCount === 3) {
+        setTimeout(() => stopRecording(), 600);
+      }
+    }, t);
+  });
+}
+
+function stopRecording() {
+  isRecording = false;
+  clearTimeout(recordTimer);
+
+  if (mediaRecorder) {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(t => t.stop());
+  }
+
+  // UI: done state
+  const btn = document.getElementById('record-btn');
+  btn.classList.remove('recording');
+  btn.classList.add('done');
+  document.getElementById('record-label').textContent = '✓ บันทึกเสียงเรียบร้อย — กดใหม่เพื่อบันทึกซ้ำ';
+
+  // Stop waveform animation
+  document.getElementById('waveform').classList.remove('show');
+
+  // Show mock audio result
+  hasAudio = true;
+  showAudioResult();
+}
+
+function showAudioResult() {
+  const results = [
+    { title: 'เสียงกังวานสูง — คาดว่าสุกพอดี', detail: 'ความถี่หลัก 420 Hz · กังวาน 0.8 วินาที' },
+    { title: 'เสียงทึบ — อาจยังอ่อนอยู่', detail: 'ความถี่หลัก 280 Hz · กังวานสั้น 0.3 วินาที' },
+    { title: 'เสียงนุ่ม — คาดว่าสุกงอม', detail: 'ความถี่หลัก 190 Hz · กังวานต่ำมาก' },
+  ];
+  const r = results[Math.floor(Math.random() * results.length)];
+  document.getElementById('audio-result-title').textContent = r.title;
+  document.getElementById('audio-result-detail').textContent = r.detail;
+  document.getElementById('audio-result').classList.add('show');
+}
+
+// ===== ANALYSIS =====
+const MOCK = [
+  {
+    species: 'หมอนทอง', speciesConf: '94%',
+    visual: '82%', audio: '91%',
+    ripeness: 87, ripenessLabel: 'สุกพอดี', badge: 'success', badgeText: 'สุกพอดี',
+    flesh: '31%',
+    eatDay: 'เหมาะกินวันนี้ – พรุ่งนี้', eatSub: 'เก็บในตู้เย็นได้อีก 1–2 วัน',
+    fleshTags: ['สีเหลืองทอง','เนื้อแห้ง','หวานมาก','กลิ่นหอม'],
+    barColor: '#639922',
+    eatBg: '#EAF3DE', eatColor: '#27500A', eatSubColor: '#3B6D11'
+  },
+  {
+    species: 'ชะนี', speciesConf: '88%',
+    visual: '58%', audio: '64%',
+    ripeness: 62, ripenessLabel: 'เกือบสุก', badge: 'warning', badgeText: 'เกือบสุก',
+    flesh: '28%',
+    eatDay: 'รอ 2–3 วันก่อนกิน', eatSub: 'วางไว้ที่อุณหภูมิห้อง',
+    fleshTags: ['สีเหลืองอ่อน','เนื้อนุ่ม','หวานปานกลาง'],
+    barColor: '#BA7517',
+    eatBg: '#FAEEDA', eatColor: '#633806', eatSubColor: '#854F0B'
+  },
+  {
+    species: 'ก้านยาว', speciesConf: '79%',
+    visual: '96%', audio: '93%',
+    ripeness: 95, ripenessLabel: 'สุกงอม', badge: 'danger', badgeText: 'สุกงอม',
+    flesh: '29%',
+    eatDay: 'กินได้เลยวันนี้', eatSub: 'อย่าเก็บไว้ข้ามคืน',
+    fleshTags: ['สีเหลืองเข้ม','เนื้อนิ่ม','หวานมาก','กลิ่นแรง'],
+    barColor: '#A32D2D',
+    eatBg: '#FCEBEB', eatColor: '#791F1F', eatSubColor: '#A32D2D'
+  }
+];
+
+function runAnalysis() {
+  document.getElementById('audio-card').style.display = 'none';
+  document.getElementById('loading').style.display = 'block';
+
+  const msgs = ['กำลังวิเคราะห์ภาพ...','ประมวลผลเสียงเคาะ...','รวมผลทั้งสองโมเดล...','คำนวณผลสุดท้าย...'];
+  let i = 0;
+  const lt = document.getElementById('loading-text');
+  const iv = setInterval(() => { lt.textContent = msgs[++i % msgs.length]; }, 700);
+
+  setTimeout(() => {
+    clearInterval(iv);
+    document.getElementById('loading').style.display = 'none';
+    const r = MOCK[Math.floor(Math.random() * MOCK.length)];
+    showResult(r);
+  }, 2800);
+}
+
+function showResult(r) {
+  document.getElementById('r-species').textContent = r.species;
+  document.getElementById('r-species-conf').textContent = 'ความมั่นใจ ' + r.speciesConf;
+  document.getElementById('r-visual').textContent = r.visual;
+  document.getElementById('r-audio').textContent = r.audio;
+  document.getElementById('r-ripeness').textContent = r.ripeness + '%';
+  document.getElementById('r-ripeness-label').textContent = r.ripenessLabel;
+  document.getElementById('r-flesh').textContent = r.flesh;
+  document.getElementById('r-eat-day').textContent = r.eatDay;
+  document.getElementById('r-eat-sub').textContent = r.eatSub;
+
+  const badge = document.getElementById('result-badge');
+  badge.textContent = r.badgeText;
+  badge.className = 'badge ' + r.badge;
+
+  document.getElementById('r-flesh-tags').innerHTML =
+    r.fleshTags.map(t => `<span class="flesh-tag">${t}</span>`).join('');
+
+  const bar = document.getElementById('r-bar');
+  bar.style.background = r.barColor;
+  setTimeout(() => { bar.style.width = r.ripeness + '%'; }, 100);
+
+  // Audio bar visualization (mock waveform)
+  const barsEl = document.getElementById('r-audio-bars');
+  barsEl.innerHTML = '';
+  const heights = [30,60,90,55,80,40,70,95,45,65,85,50,75,35,90,60,40,80,55,70];
+  heights.forEach(h => {
+    const b = document.createElement('div');
+    b.className = 'audio-bar-item';
+    b.style.height = (h * 0.32) + 'px';
+    b.style.background = r.barColor;
+    barsEl.appendChild(b);
+  });
+
+  const eatBox = document.getElementById('eat-day-box');
+  eatBox.style.background = r.eatBg;
+  document.getElementById('r-eat-day').style.color = r.eatColor;
+  document.getElementById('r-eat-sub').style.color = r.eatSubColor;
+
+  document.getElementById('result-card').style.display = 'block';
+}
+
+function resetApp() {
+  // Reset all state
+  hasPhoto = false; hasAudio = false;
+  knockCount = 0;
+  document.getElementById('result-card').style.display = 'none';
+  document.getElementById('photo-card').style.display = 'block';
+  document.getElementById('audio-card').style.display = 'none';
+  document.getElementById('camera-area').classList.remove('has-image');
+  document.getElementById('preview-img').src = '';
+  document.getElementById('file-input').value = '';
+  document.getElementById('next-to-audio-btn').disabled = true;
+  document.getElementById('r-bar').style.width = '0%';
+  // Reset audio UI
+  const btn = document.getElementById('record-btn');
+  btn.classList.remove('recording','done');
+  document.getElementById('record-label').textContent = 'กดค้างเพื่อบันทึกเสียงเคาะ';
+  document.getElementById('waveform').classList.remove('show');
+  document.getElementById('knock-counter').style.display = 'none';
+  document.getElementById('audio-result').classList.remove('show');
+  ['dot1','dot2','dot3'].forEach(id => document.getElementById(id).classList.remove('hit'));
+  document.getElementById('knock-count-text').textContent = '0/3 ครั้ง';
+}
+</script>
 </body>
 </html>
